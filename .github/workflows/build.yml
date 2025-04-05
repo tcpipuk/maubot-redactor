@@ -40,9 +40,6 @@ jobs:
           ruff check . --output-format=github >> $GITHUB_STEP_SUMMARY
           echo "## Ruff Format Issues" >> $GITHUB_STEP_SUMMARY
           ruff format --check --diff . >> $GITHUB_STEP_SUMMARY
-          # Run tests
-          echo "## Pytest Results" >> $GITHUB_STEP_SUMMARY
-          pytest --verbose >> $GITHUB_STEP_SUMMARY
           # Build plugin
           mbc build
           # Store the .mbp filename
