@@ -120,7 +120,7 @@ class RedactorPlugin(BasePlugin):
         banned_user_mxid_str: str | None = evt.state_key
         room_id: RoomID = evt.room_id
         reason: str = evt.content.reason or ""
-        ban_ts = datetime.fromtimestamp(evt.origin_server_ts / 1000, tz=UTC)
+        ban_ts = datetime.fromtimestamp(evt.timestamp / 1000, tz=UTC)
 
         if not banned_user_mxid_str:
             self.log.warning("Received ban event in %s without state_key (target user).", room_id)
@@ -393,7 +393,7 @@ class RedactorPlugin(BasePlugin):
             - A boolean: True if the message was older than the cutoff time (signaling
               that subsequent messages in the batch will also be too old), False otherwise.
         """
-        event_ts = datetime.fromtimestamp(message_evt.origin_server_ts / 1000, tz=UTC)
+        event_ts = datetime.fromtimestamp(message_evt.timestamp / 1000, tz=UTC)
 
         if cutoff_time and event_ts < cutoff_time:
             self.log.debug(
