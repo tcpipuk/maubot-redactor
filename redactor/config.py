@@ -50,19 +50,6 @@ class Config(BaseProxyConfig):
         Args:
             helper: Helper object to copy configuration values.
         """
-        # Copy main sections
+        # Copy main sections - this handles merging keys within these sections
         helper.copy("redaction")
         helper.copy("reporting")
-
-        # Ensure subsections exist if the main sections do
-        redaction = helper.base["redaction"]
-        redaction.copy("max_messages")
-        redaction.copy("max_age_hours")
-        redaction.copy("mxids")
-        redaction.copy("reasons")
-
-        reporting = helper.base["reporting"]
-        reporting.copy("room")
-        reporting.copy("report_redactions")
-        reporting.copy("post_errors")
-        reporting.copy("vias")
