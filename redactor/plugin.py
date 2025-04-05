@@ -58,8 +58,8 @@ if TYPE_CHECKING:
 
     from .config import Config
 
-# Define the constant using the Enum member
-DIRECTION_BACKWARDS = PaginationDirection.BACKWARDS
+# Define the constant using the Enum member 'b'
+DIRECTION_BACKWARDS = PaginationDirection.b
 
 # Constants for retry logic
 REDACTION_RETRY_ATTEMPTS = 3
