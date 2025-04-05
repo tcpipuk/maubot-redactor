@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
 
 # Maubot and Mautrix imports
-from maubot import event
+from maubot.handlers import event
 from mautrix.errors import MatrixConnectionError, MatrixRequestError, MForbidden, MNotFound
 from mautrix.types import (
     EventID,
@@ -102,7 +102,7 @@ class RedactorPlugin(BasePlugin):
 
     # --- Ban Event Handling ---
 
-    @event(EventType.ROOM_MEMBER)
+    @event.on(EventType.ROOM_MEMBER)
     async def handle_ban_event(self, evt: StateEvent) -> None:
         """Handles incoming m.room.member state events.
 
