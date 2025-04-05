@@ -43,7 +43,6 @@ from mautrix.types import (
     Membership,
     MessageEvent,
     PaginationDirection,
-    RoomGetMessagesResponse,
     RoomID,
     RoomMemberStateEventContent,
     StateEvent,
@@ -552,7 +551,7 @@ class RedactorPlugin(BasePlugin):
             )
             try:
                 # Fetch a batch of messages going backwards in time
-                resp: RoomGetMessagesResponse = await self.client.get_room_messages(
+                resp = await self.client.get_room_messages(
                     room_id=room_id,
                     start=pagination_token,
                     limit=fetch_limit,
