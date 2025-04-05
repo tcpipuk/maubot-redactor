@@ -36,14 +36,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 # Maubot and Mautrix imports
 from maubot.handlers import event
-from mautrix.errors import (
-    MatrixConnectionError,
-    MatrixRequestError,
-    MatrixServerError,
-    MatrixTimeoutError,
-    MForbidden,
-    MNotFound,
-)
+from mautrix.errors import MatrixConnectionError, MatrixRequestError, MForbidden, MNotFound
 from mautrix.types import (
     EventID,
     EventType,
@@ -675,12 +668,7 @@ class RedactorPlugin(BasePlugin):
                     break
 
                 # --- Retriable Errors ---
-                except (
-                    MatrixConnectionError,
-                    MatrixTimeoutError,
-                    MatrixServerError,
-                    MatrixRequestError,
-                ) as e:
+                except (MatrixConnectionError, MatrixRequestError) as e:
                     error_type = type(e).__name__
                     self.log.warning(
                         "Failed to redact message %s in %s (Attempt %d/%d): %s (%s). Retrying...",
