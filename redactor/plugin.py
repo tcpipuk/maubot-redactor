@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
 
 # Maubot and Mautrix imports
-from maubot.handlers import event
+from maubot import event
 from mautrix.errors import MatrixConnectionError, MatrixRequestError, MForbidden, MNotFound
 from mautrix.types import (
     EventID,
