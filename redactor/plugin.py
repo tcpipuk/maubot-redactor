@@ -504,11 +504,11 @@ class RedactorPlugin(BasePlugin):
                 "Fetching message batch for %s starting from token %s", room_id, pagination_token
             )
             try:
-                resp = await self.client.get_room_messages(
+                resp = await self.client.get_messages(
                     room_id=room_id,
-                    start=pagination_token,
-                    limit=fetch_limit,
                     direction=DIRECTION_BACKWARDS,
+                    from_token=pagination_token,
+                    limit=fetch_limit,
                 )
             except Exception:
                 self.log.exception("Failed to fetch messages for room %s", room_id)
