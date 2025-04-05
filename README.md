@@ -33,49 +33,74 @@ automate moderation by redacting messages from users who are banned for specific
 ## Configuration Guide
 
 Edit settings in the Maubot admin interface or directly in the instance's configuration file
-(derived from `base-config.yaml`):
+(derived from `base-config.yaml`).
 
 ```yaml
-# Central reporting room for errors and/or successful redactions
-report_to_room: "!moderationroom:example.org"
+# Settings related to message redaction
+redaction:
+  # Maximum number of recent messages to check and potentially redact per user ban.
+  # Set to null or omit to disable the message count limit.
+  max_messages: 50
 
-# Configuration for reporting actions
+  # Maximum age of messages (in hours) to check and potentially redact.
+  # Only messages sent within this timeframe before the ban event will be considered.
+  # Set to null or omit to disable the time limit.
+  max_age_hours: 24 # e.g., 24 hours = 1 day
+
+  # List of moderator MXIDs (full Matrix User IDs) whose bans should trigger redactions.
+  # Example: ["@moderator1:example.org", "@admin:example.org"]
+  mxids: []
+
+  # List of regex patterns to match against the ban reason.
+  # If a ban is issued by a moderator listed in 'mxids' AND the reason matches
+  # ANY pattern in this list, redaction will occur.
+  # Matching is ALWAYS case-insensitive.
+  # Example: ["^spam$", "unwanted advertising", "rule violation \d+"]
+  reasons: []
+
+# Settings related to reporting bot actions
 reporting:
-  # Report successful redactions to the report_to_room
+  # Room ID where the bot should send reports (successful redactions, errors).
+  # Leave null or omit for no reporting. Use Room ID (e.g., "!room:server") for efficiency.
+  room: null
+
+  # Whether to report successful redactions to the reporting room.
   report_redactions: true
-  # Report processing errors to the report_to_room
+
+  # Whether to report processing errors to the reporting room.
   post_errors: true
 
-# Number of recent messages to check and potentially redact for a banned user
-redact_limit: 10
+  # Optional: List of Matrix servers to use for constructing matrix.to links in reports.
+  # Helps ensure links are accessible.
+  # Example: ["matrix.org", "yourserver.org"]
+  vias:
+    - matrix.org
 
-# List of users and ban reason patterns to act upon.
-# 'mxid' is the full MXID of the moderator performing the ban.
-# 'reason_pattern' is a regex string to match against the ban reason.
-ban_list:
-  - mxid: "@moderator1:example.org"
-    reason_pattern: "^Spam$"
-  - mxid: "@admin:example.org"
-    reason_pattern: "(?i)unwanted advertising" # Case-insensitive match
 ```
 
-> **Tip**: Using room IDs (like `!room:server`) is more efficient than aliases (like `#room:server`)
-> for the `report_to_room` setting.
+> **Tip**: Using room IDs (like `!room:server`) is generally more reliable and efficient than aliases
+> (like `#room:server`) for the `reporting.room` setting.
 
 ## Usage Example
 
-1. Configure the `ban_list` with the MXID of a moderator (`@moderator1:example.org`) and a specific
-   reason pattern (`^Spam$`).
-2. Set `redact_limit` to `5`.
-3. Enable `report_redactions`.
-4. User `@spammer:example.net` posts several messages in a room where the bot is active.
-5. `@moderator1:example.org` bans `@spammer:example.net` from the room with the exact reason "Spam".
-6. The bot detects the ban event.
-7. It checks the ban list and finds a match for the moderator MXID and the reason pattern.
-8. The bot redacts the last 5 messages sent by `@spammer:example.net` in that room.
-9. If `report_to_room` is configured and `report_redactions` is true, the bot sends a message to the
-   reporting room, for example:
-   `Redacted 5 messages from @spammer:example.net in !targetroom:example.org due to ban by @moderator1:example.org (Reason: Spam)`
+1. Configure `redaction.mxids` with the moderators to monitor (e.g., `@moderator1:example.org`).
+2. Configure `redaction.reasons` with reason patterns (e.g., `spam`, `unwanted advertising`).
+   Note that `spam` will match "Spam", "spam", "SPAM", etc. due to case-insensitivity.
+3. Set redaction limits, e.g., `redaction.max_messages: 5`, `redaction.max_age_hours: 48`.
+4. Configure `reporting.room` to your moderation room ID and set `reporting.report_redactions: true`.
+5. User `@spammer:example.net` posts several messages in a room where the bot is active over the
+   last 3 days.
+6. `@moderator1:example.org` (listed in `redaction.mxids`) bans `@spammer:example.net` with the
+   reason "Spam".
+7. The bot detects the ban, checks `redaction.mxids`, and confirms the moderator matches.
+8. It checks the reason "Spam" against `redaction.reasons`. It finds a match with the pattern `spam`
+   (case-insensitive).
+9. The bot retrieves recent messages from `@spammer:example.net`. It only considers messages sent
+   within the last 48 hours (`max_age_hours`). From that subset, it redacts up to the 5 most recent
+   ones (`max_messages`). Let's say 4 messages meet these criteria.
+10. The bot redacts those 4 messages.
+11. The bot sends a report to the `reporting.room`, for example:
+    `Redacted 4 messages from @spammer:example.net in !targetroom:example.org due to ban by @moderator1:example.org (reason: Spam)`
 
 ## Contributing
 
