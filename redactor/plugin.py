@@ -44,7 +44,6 @@ from mautrix.types import (
     MessageEvent,
     PaginationDirection,
     RoomID,
-    RoomMemberStateEventContent,
     StateEvent,
     UserID,
 )
@@ -104,19 +103,16 @@ class RedactorPlugin(BasePlugin):
     # --- Ban Event Handling ---
 
     @event(EventType.ROOM_MEMBER)
-    async def handle_ban_event(self, evt: StateEvent[RoomMemberStateEventContent]) -> None:
+    async def handle_ban_event(self, evt: StateEvent) -> None:
         """Handles incoming m.room.member state events.
 
         Identifies ban events and checks if they meet the configured criteria
         (moderator MXID, ban reason pattern) to trigger message redaction.
         """
-        if not isinstance(evt, StateEvent) or not isinstance(
-            evt.content, RoomMemberStateEventContent
-        ):
+        if not isinstance(evt, StateEvent) or not hasattr(evt.content, "membership"):
+            self.log.debug("Ignoring event that is not a StateEvent or lacks content.membership")
             return
 
-        # Only process actual ban events (not profile changes, unbans, leaves, etc.)
-        # Also ignore if user bans themselves (state_key == sender)
         if evt.content.membership != Membership.BAN or evt.state_key == evt.sender:
             return
 
@@ -124,7 +120,6 @@ class RedactorPlugin(BasePlugin):
         banned_user_mxid_str: str | None = evt.state_key
         room_id: RoomID = evt.room_id
         reason: str = evt.content.reason or ""
-        # Use timezone aware datetime objects for comparisons
         ban_ts = datetime.fromtimestamp(evt.origin_server_ts / 1000, tz=UTC)
 
         if not banned_user_mxid_str:
@@ -141,7 +136,6 @@ class RedactorPlugin(BasePlugin):
             ban_ts,
         )
 
-        # Check if the ban meets configured criteria using helper methods
         if self._check_moderator(moderator_mxid, room_id) and self._check_reason(reason, room_id):
             self.log.info(
                 "Ban by %s for '%s' matches criteria. Checking messages for %s in %s.",
@@ -150,7 +144,6 @@ class RedactorPlugin(BasePlugin):
                 banned_user_mxid,
                 room_id,
             )
-            # If criteria met, proceed to fetch and redact messages
             await self._redact_user_messages(
                 room_id=room_id,
                 banned_user_mxid=banned_user_mxid,
@@ -159,7 +152,6 @@ class RedactorPlugin(BasePlugin):
                 ban_ts=ban_ts,
             )
         else:
-            # Log if criteria were not met
             self.log.debug(
                 "Ban criteria not met for %s in %s by %s (Reason: '%s'). "
                 "No redaction action taken.",
@@ -179,19 +171,14 @@ class RedactorPlugin(BasePlugin):
         Returns:
             True if the moderator is allowed, False otherwise.
         """
-        # Ensure comparison is case-insensitive for MXIDs if needed, although spec says
-        # they are case-sensitive. Storing them lowercased in config might be safer if
-        # input varies. Assuming exact match for now.
         allowed_moderators: list[str] = self.config["redaction.mxids"]
         if not allowed_moderators:
-            # Log a warning if the feature is essentially disabled by lack of config
-            # This should perhaps only be logged once or less frequently.
             self.log.warning(
                 "Redaction check triggered in %s, but no moderator MXIDs configured in "
                 "`redaction.mxids`!",
                 room_id,
             )
-            return False  # Cannot proceed without knowing allowed moderators
+            return False
 
         if moderator_mxid not in allowed_moderators:
             self.log.debug(
@@ -201,7 +188,6 @@ class RedactorPlugin(BasePlugin):
                 allowed_moderators,
             )
             return False
-        # Moderator is in the list
         self.log.debug("Moderator %s confirmed in allowed list for %s.", moderator_mxid, room_id)
         return True
 
@@ -220,34 +206,25 @@ class RedactorPlugin(BasePlugin):
         """
         reason_patterns: list[str] = self.config["redaction.reasons"]
         if not reason_patterns:
-            # If no patterns are set, consider any reason (or no reason) a match
             self.log.debug("No reason patterns configured for room %s, assuming match.", room_id)
             return True
 
-        # Iterate through configured patterns
         for pattern in reason_patterns:
             try:
-                # Use re.search for case-insensitive substring matching
-                # re.compile() was already attempted at startup, so we expect valid patterns here
-                # but include a failsafe check just in case config was reloaded without restart?
-                # Or rely on startup validation. Let's rely on startup validation for now.
-                # If re.error occurs here, it indicates a logic flaw or runtime config change issue.
                 if re.search(pattern, reason, re.IGNORECASE):
                     self.log.debug(
                         "Ban reason '%s' matched pattern '%s' in %s.", reason, pattern, room_id
                     )
-                    return True  # Match found, no need to check further
+                    return True
             except re.error:
-                # This *shouldn't* happen if startup validation ran. Log as error if it does.
                 self.log.exception(
                     "Unexpected regex error during check for pattern '%s' in %s. "
                     "This pattern should have been caught at startup.",
                     pattern,
                     room_id,
                 )
-                # Continue checking other patterns
+                continue
             except TypeError:
-                # This also shouldn't happen if startup validation ran.
                 self.log.exception(
                     "Unexpected type error during regex check for pattern '%s' in %s. "
                     "Config validation might have failed.",
@@ -255,7 +232,6 @@ class RedactorPlugin(BasePlugin):
                     room_id,
                 )
 
-        # If loop completes without finding a match
         self.log.debug(
             "Ban reason '%s' in %s did not match any valid configured patterns: %s",
             reason,
@@ -289,20 +265,18 @@ class RedactorPlugin(BasePlugin):
         error_context_message: str | None = None
 
         try:
-            # Fetch the list of EventIDs to redact based on configuration limits
             error_context_message = "fetching messages"
             messages_to_redact = await self._fetch_messages_to_redact(
                 room_id, banned_user_mxid, ban_ts
             )
 
-            # If no messages meet the criteria, log and exit early
             if not messages_to_redact:
                 self.log.info(
                     "No messages found to redact for %s in %s within configured limits.",
                     banned_user_mxid,
                     room_id,
                 )
-                return  # Nothing to do
+                return
 
             self.log.info(
                 "Attempting to redact %d message(s) from %s in %s...",
@@ -311,13 +285,11 @@ class RedactorPlugin(BasePlugin):
                 room_id,
             )
 
-            # Construct the reason string for the redaction events themselves
             redaction_reason_str = (
                 f"Redacted due to ban of {banned_user_mxid} by {moderator_mxid} "
                 f"(Reason: {reason or 'Not specified'})"
             )
 
-            # Perform the redactions and get the count and first successful ID
             error_context_message = "performing redactions"
             redacted_count, first_redacted_event_id = await self._perform_redactions(
                 room_id, messages_to_redact, redaction_reason_str
@@ -339,22 +311,16 @@ class RedactorPlugin(BasePlugin):
                 reason=reason,
                 count=redacted_count,
                 total_considered=len(messages_to_redact),
-                first_redacted_event_id=first_redacted_event_id,  # Pass the ID
+                first_redacted_event_id=first_redacted_event_id,
             )
             failed_count = len(messages_to_redact) - redacted_count
 
-            # Report successful actions if enabled and actions occurred
             if redacted_count > 0 and self.config["reporting.report_redactions"]:
                 await self._report_action(report_ctx)
-            # Report errors if enabled and some redactions failed (due to non-transient errors)
-            # Transient errors that failed after retries are caught by the main exception handler
             elif failed_count > 0 and self.config["reporting.post_errors"]:
-                # This error report is specifically for non-transient redaction failures
-                # like MForbidden or MNotFound, which were logged during _perform_redactions.
                 error_ctx = ErrorReportContext(
                     room_id=room_id,
                     banned_user_mxid=banned_user_mxid,
-                    # Create a generic exception for the report
                     error=Exception(
                         f"Failed to redact {failed_count} message(s) due to "
                         "permissions, message already gone, or other non-retriable issues "
@@ -365,20 +331,18 @@ class RedactorPlugin(BasePlugin):
                 await self._report_error(error_ctx)
 
         except Exception as e:
-            # Catch errors during the overall fetching/processing/retrying
             self.log.exception(
                 "Error during message %s for %s in %s",
-                error_context_message or "processing",  # Add context
+                error_context_message or "processing",
                 banned_user_mxid,
                 room_id,
             )
-            # Report the error if enabled
             if self.config["reporting.post_errors"]:
                 error_ctx = ErrorReportContext(
                     room_id=room_id,
                     banned_user_mxid=banned_user_mxid,
                     error=e,
-                    context_message=error_context_message,  # Pass context to report
+                    context_message=error_context_message,
                 )
                 await self._report_error(error_ctx)
 
@@ -398,16 +362,13 @@ class RedactorPlugin(BasePlugin):
         if max_age_hours is None:
             return None
         try:
-            # Ensure max_age_hours is treated as a float for timedelta
             cutoff = ban_ts - timedelta(hours=float(max_age_hours))
         except ValueError:
-            # Handle cases where config value might not be a valid number
             self.log.exception(
                 "Invalid value for max_age_hours: %s. Disabling time limit.", max_age_hours
             )
-            cutoff = None  # Explicitly set to None on error
+            cutoff = None
         else:
-            # Log the calculated cutoff time if successful
             self.log.debug(
                 "Calculated redaction cutoff time: %s (%s hours before ban at %s)",
                 cutoff,
@@ -434,7 +395,6 @@ class RedactorPlugin(BasePlugin):
         """
         event_ts = datetime.fromtimestamp(message_evt.origin_server_ts / 1000, tz=UTC)
 
-        # Check 1: Time limit
         if cutoff_time and event_ts < cutoff_time:
             self.log.debug(
                 "Stopping check: Event %s from %s at %s is older than cutoff time %s.",
@@ -443,13 +403,11 @@ class RedactorPlugin(BasePlugin):
                 event_ts,
                 cutoff_time,
             )
-            return None, True  # Time limit reached for this and subsequent messages
+            return None, True
 
-        # Check 2: User match
         if message_evt.sender != banned_user_mxid:
-            return None, False  # Not the right user, but time limit not necessarily reached
+            return None, False
 
-        # Message is from the target user and within time limits
         return message_evt.event_id, False
 
     def _process_message_batch(
@@ -487,7 +445,7 @@ class RedactorPlugin(BasePlugin):
 
             if reached_time_limit:
                 reached_time_limit_in_batch = True
-                break  # Stop processing this batch
+                break
 
             if event_id_to_add:
                 if max_messages is None or len(messages_to_redact) < max_messages:
@@ -498,15 +456,13 @@ class RedactorPlugin(BasePlugin):
                         len(messages_to_redact),
                         max_messages or "unlimited",
                     )
-                    # Check if we *just* hit the limit
                     if max_messages is not None and len(messages_to_redact) >= max_messages:
                         self.log.debug(
                             "Reached max_messages limit (%d) after adding event.", max_messages
                         )
                         reached_message_limit_in_batch = True
-                        break  # Stop processing this batch
+                        break
                 else:
-                    # This case means we already had enough messages before this one
                     self.log.debug(
                         "Reached max_messages limit (%d). Stopping batch processing.", max_messages
                     )
@@ -534,11 +490,9 @@ class RedactorPlugin(BasePlugin):
         messages: list[EventID] = []
         events_checked_total = 0
         pagination_token: str | None = None
-        fetch_limit = 100  # How many messages to request per API call
+        fetch_limit = 100
 
-        # Loop fetching message batches until a limit is hit or history ends
         while True:
-            # Optimization: Stop fetching if we already have enough messages
             if max_messages_to_redact is not None and len(messages) >= max_messages_to_redact:
                 self.log.debug(
                     "Reached max_messages limit (%d). Stopping message fetch.",
@@ -550,7 +504,6 @@ class RedactorPlugin(BasePlugin):
                 "Fetching message batch for %s starting from token %s", room_id, pagination_token
             )
             try:
-                # Fetch a batch of messages going backwards in time
                 resp = await self.client.get_room_messages(
                     room_id=room_id,
                     start=pagination_token,
@@ -558,42 +511,34 @@ class RedactorPlugin(BasePlugin):
                     direction=DIRECTION_BACKWARDS,
                 )
             except Exception:
-                # Log and re-raise to be handled by the main orchestrator method
                 self.log.exception("Failed to fetch messages for room %s", room_id)
                 raise
 
-            # Check if the server returned any messages in this batch
             if not resp or not resp.chunk:
                 self.log.debug(
                     "No more messages found for %s from token %s.", room_id, pagination_token
                 )
-                break  # End of room history reached
+                break
 
-            # Prepare for the next fetch iteration
             pagination_token = resp.end
             batch_size = len(resp.chunk)
             events_checked_total += batch_size
 
-            # Process the fetched batch using the helper function
             reached_time_limit, reached_message_limit = self._process_message_batch(
                 resp.chunk, messages, cutoff_time, banned_user_mxid, max_messages_to_redact
             )
 
             self.log.debug("Processed %d events in batch for %s.", batch_size, room_id)
 
-            # Stop fetching older batches if any limit was hit within this batch
             if reached_time_limit:
                 self.log.debug("Reached time limit, stopping message fetch for %s.", room_id)
                 break
             if reached_message_limit:
-                # Log message already handled inside _process_message_batch if limit hit
                 break
-            # Stop if the server indicates no more pages available
             if not pagination_token:
                 self.log.debug("Server indicated no more messages for %s.", room_id)
                 break
 
-        # Log final outcome of the fetching process
         self.log.info(
             "Checked %d events in %s. Found %d messages from %s within limits.",
             events_checked_total,
@@ -628,7 +573,7 @@ class RedactorPlugin(BasePlugin):
         first_success_event_id: EventID | None = None
 
         for event_id in event_ids:
-            should_break_outer = False  # Flag to break outer loop from inner handler
+            should_break_outer = False
             for attempt in range(REDACTION_RETRY_ATTEMPTS):
                 try:
                     await self.client.redact(
@@ -643,10 +588,9 @@ class RedactorPlugin(BasePlugin):
                         room_id,
                         attempt + 1,
                     )
-                    should_break_outer = True  # Success, break outer loop
-                    break  # Break retry loop
+                    should_break_outer = True
+                    break
 
-                # --- Non-Retriable Errors ---
                 except MForbidden:
                     self.log.warning(
                         "Failed to redact message %s in %s: Permission denied (MForbidden). "
@@ -654,7 +598,7 @@ class RedactorPlugin(BasePlugin):
                         event_id,
                         room_id,
                     )
-                    should_break_outer = True  # Non-retriable, break outer loop
+                    should_break_outer = True
                     break
                 except MNotFound:
                     self.log.warning(
@@ -663,10 +607,9 @@ class RedactorPlugin(BasePlugin):
                         event_id,
                         room_id,
                     )
-                    should_break_outer = True  # Non-retriable, break outer loop
+                    should_break_outer = True
                     break
 
-                # --- Retriable Errors ---
                 except (MatrixConnectionError, MatrixRequestError) as e:
                     error_type = type(e).__name__
                     self.log.warning(
@@ -679,35 +622,29 @@ class RedactorPlugin(BasePlugin):
                         e,
                     )
                     if attempt + 1 == REDACTION_RETRY_ATTEMPTS:
-                        self.log.exception(  # Use exception to log traceback on final failure
+                        self.log.exception(
                             "Failed to redact message %s in %s after %d attempts due to %s",
                             event_id,
                             room_id,
                             REDACTION_RETRY_ATTEMPTS,
                             error_type,
                         )
-                        should_break_outer = True  # Final attempt failed, break outer loop
+                        should_break_outer = True
                         break
-                    # Wait before retrying (basic exponential backoff)
                     await asyncio.sleep(REDACTION_RETRY_DELAY_SECONDS * (attempt + 1))
 
-                # --- Unknown Errors ---
                 except Exception:
-                    # Log unexpected errors - treat as non-retriable
                     self.log.exception(
                         "Unexpected error redacting message %s in %s (Attempt %d)",
                         event_id,
                         room_id,
                         attempt + 1,
                     )
-                    should_break_outer = True  # Non-retriable, break outer loop
+                    should_break_outer = True
                     break
-            # End of retry loop (inner)
-
             if should_break_outer:
-                continue  # Continue to the next event_id if handled above
+                continue
 
-        # End of event_id loop (outer)
         return redacted_count, first_success_event_id
 
     # --- Reporting ---
@@ -719,43 +656,36 @@ class RedactorPlugin(BasePlugin):
         """
         report_room_id = self.config["reporting.room"]
         if not report_room_id:
-            return  # Reporting disabled
+            return
 
         try:
             room_identifier = await get_room_identifier(self.client, ctx["room_id"], self.log)
             reason_text = ctx["reason"] or "Not specified"
             via_servers = self.config["reporting.vias"]
 
-            # Base message
             message = (
                 f"Redacted {ctx['count']}/{ctx['total_considered']} message(s) from "
                 f"`{ctx['banned_user_mxid']}` in {room_identifier} due to ban by "
                 f"`{ctx['moderator_mxid']}` (Reason: '{reason_text}')"
             )
 
-            # Add link if an event was successfully redacted
             if ctx["first_redacted_event_id"]:
                 event_link = create_matrix_to_url(
                     ctx["room_id"], ctx["first_redacted_event_id"], via_servers
                 )
                 message += f". [Link to most recent redaction]({event_link})"
             else:
-                # This case shouldn't happen if count > 0, but handle defensively
                 message += ". (Could not determine link to specific redaction)."
 
-            # Resolve report room ID again just in case cache expired/config changed runtime
-            # This uses the cached version from base class if still valid
             resolved_report_room = await self.resolve_room_alias(report_room_id)
             if not resolved_report_room.startswith("!"):
                 self.log.error(
                     "Failed to resolve reporting room alias '%s' to an ID for action report.",
                     report_room_id,
                 )
-                return  # Cannot send if resolution failed
+                return
 
-            await self.client.send_markdown(
-                RoomID(resolved_report_room), message
-            )  # Use send_markdown for link
+            await self.client.send_markdown(RoomID(resolved_report_room), message)
             self.log.info(
                 "Sent redaction report to %s for ban in %s", resolved_report_room, ctx["room_id"]
             )
@@ -766,19 +696,17 @@ class RedactorPlugin(BasePlugin):
         """Sends a notification message about errors encountered during processing."""
         report_room_id = self.config["reporting.room"]
         if not report_room_id or not self.config["reporting.post_errors"]:
-            return  # Reporting disabled or errors specifically disabled
+            return
 
         try:
             room_identifier = await get_room_identifier(self.client, ctx["room_id"], self.log)
             context_msg = f" during {ctx['context_message']}" if ctx.get("context_message") else ""
 
-            # Construct the error message
             message = (
                 f"⚠️ Error processing ban redaction for user `{ctx['banned_user_mxid']}` "
                 f"in {room_identifier}{context_msg}: {ctx['error']!s}"
             )
 
-            # Resolve report room ID again
             resolved_report_room = await self.resolve_room_alias(report_room_id)
             if not resolved_report_room.startswith("!"):
                 self.log.error(
@@ -792,5 +720,4 @@ class RedactorPlugin(BasePlugin):
                 "Sent error report to %s for ban in %s", resolved_report_room, ctx["room_id"]
             )
         except Exception:
-            # Avoid error loops if reporting itself fails
             self.log.exception("CRITICAL: Failed to send error report to %s", report_room_id)
