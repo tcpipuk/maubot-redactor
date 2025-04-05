@@ -256,8 +256,34 @@ wheels = [
 ]
 
 [[package]]
-name = "matrix-nsfwbot"
-version = "0.2.1"
+name = "maubot"
+version = "0.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "aiosqlite" },
+    { name = "asyncpg" },
+    { name = "attrs" },
+    { name = "bcrypt" },
+    { name = "click" },
+    { name = "colorama" },
+    { name = "commonmark" },
+    { name = "jinja2" },
+    { name = "mautrix" },
+    { name = "packaging" },
+    { name = "questionary" },
+    { name = "ruamel-yaml" },
+    { name = "setuptools" },
+    { name = "yarl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/07/841d92d909265220e7bc6f09937c01ad79365ee4f0e4e9a23d74b7ce34ac/maubot-0.5.1.tar.gz", hash = "sha256:d14b5e959df0d10530f36e401a149cf307e161a2fd1526095c2bd864479f58f4", size = 1985415 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/00/56cc74769a60546f6cb6e7865beaae5e91c1c81020159dc62c1bb415a375/maubot-0.5.1-py3-none-any.whl", hash = "sha256:5cd4ca4c06b761d13426b0f4499b5f249e0c0532c8661c2b736bb7fe04082ed4", size = 2032473 },
+]
+
+[[package]]
+name = "maubot-redactor"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "maubot" },
@@ -282,32 +308,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.25.3" },
     { name = "pytest-timeout", specifier = ">=2.3.1" },
     { name = "ruff", specifier = ">=0.9.7" },
-]
-
-[[package]]
-name = "maubot"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "aiosqlite" },
-    { name = "asyncpg" },
-    { name = "attrs" },
-    { name = "bcrypt" },
-    { name = "click" },
-    { name = "colorama" },
-    { name = "commonmark" },
-    { name = "jinja2" },
-    { name = "mautrix" },
-    { name = "packaging" },
-    { name = "questionary" },
-    { name = "ruamel-yaml" },
-    { name = "setuptools" },
-    { name = "yarl" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/86/07/841d92d909265220e7bc6f09937c01ad79365ee4f0e4e9a23d74b7ce34ac/maubot-0.5.1.tar.gz", hash = "sha256:d14b5e959df0d10530f36e401a149cf307e161a2fd1526095c2bd864479f58f4", size = 1985415 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/00/56cc74769a60546f6cb6e7865beaae5e91c1c81020159dc62c1bb415a375/maubot-0.5.1-py3-none-any.whl", hash = "sha256:5cd4ca4c06b761d13426b0f4499b5f249e0c0532c8661c2b736bb7fe04082ed4", size = 2032473 },
 ]
 
 [[package]]
