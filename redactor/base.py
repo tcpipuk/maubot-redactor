@@ -216,11 +216,6 @@ class BasePlugin(Plugin):
                 self.config["reporting.post_errors"],
             )
 
-            # Send a startup confirmation message if reporting is enabled
-            # Avoid sending if there was a config error reported above
-            if not invalid_patterns and self.config["reporting.room"]:
-                await self._send_startup_report("✅ Redactor Plugin started successfully.")
-
         except Exception:
             # Catch any other unexpected errors during startup
             self.log.exception("FATAL: Unexpected error during RedactorPlugin startup.")
