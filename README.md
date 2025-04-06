@@ -92,11 +92,11 @@ reporting:
 
 ## Usage Example
 
-The following flowchart and summary illustrate the core logic the bot follows when processing a ban event:
+The following flowchart and summary illustrate the entire logic the bot follows:
 
 ```mermaid
 graph TD
-    A["Ban Event Received<br>(m.room.member)"] --> CheckModerator{Moderator<br>in mxids?};
+    A["Ban event received<br>(m.room.member)"] --> CheckModerator{Moderator<br>in mxids?};
 
     CheckModerator -- Yes --> CheckReason{Reason<br>matches<br>patterns?};
     CheckModerator -- No --> Z[Ignore Ban];
