@@ -1,24 +1,15 @@
 """Utility functions supporting the Redactor plugin.
 
-This module provides helper functions that support the core plugin functionality.
-
-Functions:
-    create_matrix_to_url: Creates matrix.to URLs.
-    get_room_identifier: Attempts to resolve a room alias, falling back to ID.
-    lru_cache_with_ttl: An LRU cache implementation with a time-to-live (TTL).
+Provides helper functions for tasks like creating matrix.to URLs, resolving
+room identifiers, and caching function results with a time-to-live (TTL).
 """
 
 from __future__ import annotations
 
-# Standard library imports
 import time
 from collections import OrderedDict
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar
-
-# Define a generic type variable for the cache decorator
-FuncReturnType = TypeVar("FuncReturnType")
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,67 +18,72 @@ if TYPE_CHECKING:
     from mautrix.client import MaubotMatrixClient
     from mautrix.types import EventID, RoomID
 
+FuncReturnType = TypeVar("FuncReturnType")
+
 
 def create_matrix_to_url(room_id: RoomID, event_id: EventID, via_servers: list[str]) -> str:
-    """Create a matrix.to URL for a given room ID and event ID.
+    """Construct a matrix.to URL for a specific event within a room.
 
     Args:
-        room_id: The room ID.
-        event_id: The event ID.
-        via_servers: List of via servers to include in the URL.
+        room_id: The Matrix Room ID.
+        event_id: The Matrix Event ID.
+        via_servers: A list of server names to include as 'via' parameters
+                     in the URL for routing hints.
 
     Returns:
-        The matrix.to URL.
+        A string containing the formatted matrix.to URL.
     """
     via_params = "?" + "&".join(f"via={server}" for server in via_servers) if via_servers else ""
-    # Ensure room_id and event_id are properly encoded if they contain special chars
-    # For simplicity, assuming standard IDs. Use urllib.parse.quote if needed.
     return f"https://matrix.to/#/{room_id}/{event_id}{via_params}"
 
 
 async def get_room_identifier(client: MaubotMatrixClient, room_id: RoomID, log: Logger) -> str:
-    """Try to get a room alias for user-friendly reporting, fall back to room ID.
+    """Get a user-friendly identifier for a room, preferring alias over ID.
+
+    Attempts to fetch the canonical alias for the given `room_id`. If successful
+    and the result looks like an alias (starts with '#'), it returns the alias.
+    Otherwise, it logs the situation and returns the original `room_id` string.
 
     Args:
-        client: The Maubot matrix client instance.
-        room_id: The RoomID to identify.
-        log: Logger instance for debugging.
+        client: The MaubotMatrixClient instance to use for API calls.
+        room_id: The RoomID of the room to identify.
+        log: The logger instance for logging debug/warning messages.
 
     Returns:
-        The room alias (if found and resolvable) or the original room ID as a string.
+        The room's canonical alias (if found) or the room ID string.
     """
     try:
-        # This might fail if the bot isn't in the room or due to permissions.
         main_alias = await client.get_room_alias(room_id)
         if main_alias:
-            # Ensure we return only the alias string, not the entire response object if applicable
-            # Assuming get_room_alias returns a list or similar structure containing the alias
-            # string. Adjust based on actual return type if necessary.
             alias_str = (
                 main_alias[0]
                 if isinstance(main_alias, (list, tuple)) and main_alias
                 else str(main_alias)
             )
-            # Basic validation that it looks like an alias
             if isinstance(alias_str, str) and alias_str.startswith("#"):
                 return alias_str
             log.warning("get_room_alias returned unexpected value for %s: %s", room_id, main_alias)
     except Exception:
-        log.debug("Could not get alias for room %s, using ID in report.", room_id)
-    return str(room_id)  # Fallback to room ID string
+        log.debug("Could not get alias for room %s, using ID.", room_id, exc_info=True)
+    return str(room_id)
 
 
 def lru_cache_with_ttl(
     maxsize: int = 128, ttl: int = 3600
 ) -> Callable[[Callable[..., FuncReturnType]], Callable[..., FuncReturnType]]:
-    """Decorator that provides an LRU cache with a Time-To-Live (TTL).
+    """Decorator factory providing an LRU cache with Time-To-Live (TTL) for async functions.
+
+    Creates a decorator that caches the results of an async function based on its
+    arguments. Cached entries expire after `ttl` seconds. Uses an OrderedDict
+    to manage cache entries and eviction based on Least Recently Used (LRU) policy
+    when `maxsize` is exceeded.
 
     Args:
-        maxsize: The maximum number of items to store in the cache.
+        maxsize: The maximum number of entries to store in the cache.
         ttl: The time-to-live for cache entries, in seconds.
 
     Returns:
-        A decorator function.
+        A decorator function that can be applied to async functions.
     """
 
     def decorator(func: Callable[..., FuncReturnType]) -> Callable[..., FuncReturnType]:
@@ -101,19 +97,13 @@ def lru_cache_with_ttl(
             if key in cache:
                 result, timestamp = cache[key]
                 if current_time - timestamp <= ttl:
-                    # Move item to the end (most recently used)
                     cache.move_to_end(key)
                     return result
-                # TTL expired, remove the item
                 del cache[key]
 
-            # Item not in cache or expired, call the function
             result = await func(*args, **kwargs)
-            # Store the new result with the current timestamp
             cache[key] = (result, current_time)
-            # Ensure the cache does not exceed maxsize
             if len(cache) > maxsize:
-                # Remove the least recently used item (first item)
                 cache.popitem(last=False)
 
             return result

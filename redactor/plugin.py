@@ -1,40 +1,17 @@
-"""Core Maubot plugin for automated message redaction based on bans.
+"""Handles Maubot event processing and core message redaction logic.
 
-This module implements the main Maubot plugin that monitors Matrix rooms for
-ban events (`m.room.member` with `membership: ban`). When a ban occurs that meets
-configured criteria (specific moderator MXID and ban reason pattern), the plugin
-automatically redacts recent messages sent by the banned user in that room.
-
-Core Features:
-    - Monitors room membership events for bans.
-    - Checks if the ban was issued by a moderator listed in the configuration.
-    - Matches the ban reason against a list of configured regex patterns (case-insensitive).
-    - Redacts recent messages from the banned user based on configurable limits:
-        * Maximum number of messages (`max_messages`).
-        * Maximum age of messages (`max_age_hours`).
-    - Optionally reports successful redactions and processing errors to a designated room.
-
-Technical Implementation:
-    - Uses Maubot's event handlers (`@event.on(EventType.ROOM_MEMBER)`).
-    - Fetches recent room messages using `client.get_room_messages`.
-    - Performs redactions using `client.redact`.
-    - Uses standard Python `re` module for reason pattern matching.
-    - Handles configuration via the `Config` class (defined in `config.py`).
-
-Configuration is handled through the Maubot admin interface or config file
-derived from `base-config.yaml`. See the `config.py` module and `README.md`
-for available settings and details.
+This module contains the main RedactorPlugin class which listens for ban events,
+checks them against configured criteria, fetches relevant messages, performs
+redactions, and handles reporting.
 """
 
 from __future__ import annotations
 
-# Standard library imports
-import asyncio  # Needed for sleep
+import asyncio
 import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
 
-# Maubot and Mautrix imports
 from maubot.handlers import event
 from mautrix.errors import MatrixConnectionError, MatrixRequestError, MForbidden, MNotFound
 from mautrix.types import (
@@ -48,21 +25,18 @@ from mautrix.types import (
     UserID,
 )
 
-# Local module imports
 from .base import BasePlugin
 from .utils import create_matrix_to_url, get_room_identifier
 
 if TYPE_CHECKING:
-    # Type hints for Mautrix API components and types
     from mautrix.util.logging import TraceLogger
 
     from .config import Config
 
 DIRECTION_BACKWARDS = PaginationDirection.BACKWARD
 
-# Constants for retry logic
 REDACTION_RETRY_ATTEMPTS = 3
-REDACTION_RETRY_DELAY_SECONDS = 2  # Initial delay, could increase
+REDACTION_RETRY_DELAY_SECONDS = 2
 
 
 class ReportContext(TypedDict):
@@ -74,7 +48,6 @@ class ReportContext(TypedDict):
     reason: str
     count: int
     total_considered: int
-    # Add field for the most recent (first processed) redacted event
     first_redacted_event_id: EventID | None
 
 
@@ -84,29 +57,31 @@ class ErrorReportContext(TypedDict):
     room_id: RoomID
     banned_user_mxid: UserID
     error: Exception
-    # Optional: context about where the error occurred
     context_message: str | None
 
 
 class RedactorPlugin(BasePlugin):
-    """A Maubot plugin that automatically redacts messages from users who are banned.
+    """A Maubot plugin that automatically redacts messages from banned users.
 
-    This plugin monitors rooms for ban events and redacts recent messages from
-    the banned user if the ban was issued by specific moderators for reasons
-    matching configured patterns.
+    Monitors rooms for ban events and redacts recent messages from the banned user
+    if the ban meets configured criteria (moderator MXID, reason pattern).
+    Handles fetching messages, performing redactions with retries, and reporting.
     """
 
     config: Config
     log: TraceLogger
 
-    # --- Ban Event Handling ---
-
     @event.on(EventType.ROOM_MEMBER)
     async def handle_ban_event(self, evt: StateEvent) -> None:
-        """Handles incoming m.room.member state events.
+        """Handles incoming m.room.member state events to detect and process bans.
 
-        Identifies ban events and checks if they meet the configured criteria
-        (moderator MXID, ban reason pattern) to trigger message redaction.
+        Identifies ban events (`membership: ban`), ignoring self-bans. Extracts relevant
+        details (moderator, banned user, room, reason, timestamp). If the ban meets
+        configured criteria via `_check_moderator` and `_check_reason`, it triggers
+        `_redact_user_messages`.
+
+        Args:
+            evt: The `m.room.member` state event.
         """
         if not isinstance(evt, StateEvent) or not hasattr(evt.content, "membership"):
             self.log.debug("Ignoring event that is not a StateEvent or lacks content.membership")
@@ -161,14 +136,16 @@ class RedactorPlugin(BasePlugin):
             )
 
     def _check_moderator(self, moderator_mxid: UserID, room_id: RoomID) -> bool:
-        """Checks if the moderator who issued the ban is listed in the configuration.
+        """Checks if the moderator who issued the ban is in the configured `mxids` list.
+
+        Performs a case-sensitive match against `config["redaction.mxids"]`.
 
         Args:
             moderator_mxid: The MXID of the moderator who issued the ban.
             room_id: The ID of the room where the ban occurred (for logging).
 
         Returns:
-            True if the moderator is allowed, False otherwise.
+            True if the moderator is in the list, False otherwise or if the list is empty.
         """
         allowed_moderators: list[str] = self.config["redaction.mxids"]
         if not allowed_moderators:
@@ -191,17 +168,18 @@ class RedactorPlugin(BasePlugin):
         return True
 
     def _check_reason(self, reason: str, room_id: RoomID) -> bool:
-        """Checks if the provided ban reason matches any configured regex patterns.
+        """Checks if the ban reason matches any configured `reasons` regex patterns.
 
-        Matching is case-insensitive. Invalid patterns logged during startup are ignored here.
+        Performs case-insensitive regex matching against `config["redaction.reasons"]`.
+        If the `reasons` list is empty, any reason (or no reason) is considered a match.
+        Relies on startup validation (`_validate_config_patterns`) to handle invalid regexes.
 
         Args:
             reason: The reason string provided with the ban event.
             room_id: The ID of the room where the ban occurred (for logging).
 
         Returns:
-            True if the reason matches a pattern or if no patterns are configured,
-            False otherwise.
+            True if the reason matches a pattern or if no patterns are configured, False otherwise.
         """
         reason_patterns: list[str] = self.config["redaction.reasons"]
         if not reason_patterns:
@@ -239,8 +217,6 @@ class RedactorPlugin(BasePlugin):
         )
         return False
 
-    # --- Message Redaction Logic ---
-
     async def _redact_user_messages(
         self,
         room_id: RoomID,
@@ -249,14 +225,19 @@ class RedactorPlugin(BasePlugin):
         reason: str,
         ban_ts: datetime,
     ) -> None:
-        """Orchestrates the process of fetching, redacting messages, and reporting.
+        """Orchestrates fetching messages, performing redactions, and reporting results.
+
+        Calls `_fetch_messages_to_redact` to get eligible message EventIDs. If any
+        are found, calls `_perform_redactions` to attempt redaction using the original
+        ban reason. Finally, calls `_report_action` or `_report_error` based on the
+        outcome and configuration. Catches and reports exceptions during the process.
 
         Args:
             room_id: The room where the ban occurred.
             banned_user_mxid: The MXID of the banned user.
             moderator_mxid: The MXID of the moderator who issued the ban.
-            reason: The reason for the ban.
-            ban_ts: The timestamp of the ban event.
+            reason: The reason for the ban (used for redaction reason and reporting).
+            ban_ts: The timestamp of the ban event (used for filtering messages).
         """
         messages_to_redact: list[EventID] = []
         redacted_count = 0
@@ -296,7 +277,6 @@ class RedactorPlugin(BasePlugin):
                 room_id,
             )
 
-            # --- Reporting ---
             error_context_message = "reporting results"
             report_ctx = ReportContext(
                 room_id=room_id,
@@ -340,16 +320,14 @@ class RedactorPlugin(BasePlugin):
             await self._report_error(error_ctx)
 
     def _calculate_cutoff_time(self, ban_ts: datetime) -> datetime | None:
-        """Calculates the earliest timestamp for message redaction consideration.
-
-        This is based on the `max_age_hours` configuration setting.
+        """Calculates the earliest timestamp for message redaction based on `max_age_hours`.
 
         Args:
-            ban_ts: The timestamp of the ban event.
+            ban_ts: The timezone-aware timestamp of the ban event.
 
         Returns:
             A timezone-aware datetime object representing the cutoff time,
-            or None if `max_age_hours` is not set or invalid.
+            or None if `max_age_hours` is not set or invalid in the config.
         """
         max_age_hours: int | float | None = self.config["redaction.max_age_hours"]
         if max_age_hours is None:
@@ -373,17 +351,17 @@ class RedactorPlugin(BasePlugin):
     def _process_message_for_redaction(
         self, message_evt: MessageEvent, cutoff_time: datetime | None, banned_user_mxid: UserID
     ) -> tuple[EventID | None, bool]:
-        """Checks a single message event against the redaction criteria (time, sender).
+        """Checks if a single message event meets the redaction criteria (time, sender).
 
         Args:
             message_evt: The MessageEvent to check.
-            cutoff_time: The earliest allowed timestamp for a message.
+            cutoff_time: The earliest allowed timestamp (timezone-aware UTC).
             banned_user_mxid: The MXID of the user whose messages should be redacted.
 
         Returns:
             A tuple containing:
             - The EventID if the message should be redacted, else None.
-            - A boolean: True if the message was older than the cutoff time (signaling
+            - A boolean: True if the message was older than the cutoff (signaling
               that subsequent messages in the batch will also be too old), False otherwise.
         """
         event_ts = datetime.fromtimestamp(message_evt.timestamp / 1000, tz=UTC)
@@ -411,18 +389,22 @@ class RedactorPlugin(BasePlugin):
         banned_user_mxid: UserID,
         max_messages: int | None,
     ) -> tuple[bool, bool]:
-        """Processes a batch of fetched messages, adding eligible ones to the list.
+        """Processes a batch of fetched messages, adding eligible EventIDs to a list.
+
+        Iterates through the `batch`, calling `_process_message_for_redaction` for each.
+        Appends eligible EventIDs to `messages_to_redact` until `max_messages` is reached
+        or a message older than `cutoff_time` is encountered.
 
         Args:
-            batch: The list of MessageEvent objects fetched from the server.
-            messages_to_redact: The list of EventIDs collected so far (will be mutated).
+            batch: The list of MessageEvent objects from `client.get_messages`.
+            messages_to_redact: The list where eligible EventIDs are collected (mutated).
             cutoff_time: The earliest allowed timestamp for a message.
             banned_user_mxid: The MXID of the target user.
             max_messages: The maximum number of messages to collect.
 
         Returns:
             A tuple (reached_time_limit, reached_message_limit):
-            - reached_time_limit: True if a message older than cutoff_time was encountered.
+            - reached_time_limit: True if a message older than cutoff_time was found.
             - reached_message_limit: True if max_messages was reached.
         """
         reached_time_limit_in_batch = False
@@ -467,15 +449,23 @@ class RedactorPlugin(BasePlugin):
     async def _fetch_messages_to_redact(
         self, room_id: RoomID, banned_user_mxid: UserID, ban_ts: datetime
     ) -> list[EventID]:
-        """Fetches and filters recent messages based on user, time, and count limits.
+        """Fetches recent messages and filters them based on configuration limits.
+
+        Paginates backwards through room history using `client.get_messages`.
+        Processes batches using `_process_message_batch` until the start of history,
+        the `max_messages` limit, or the `max_age_hours` time limit (relative to
+        `ban_ts`) is reached.
 
         Args:
             room_id: The room to fetch messages from.
             banned_user_mxid: The MXID of the user whose messages to find.
-            ban_ts: The timestamp of the ban event, used for time calculations.
+            ban_ts: The timestamp of the ban event, used for time limit calculations.
 
         Returns:
-            A list of EventIDs corresponding to messages that should be redacted.
+            A list of EventIDs (most recent first) matching the criteria.
+
+        Raises:
+            Exception: Propagates exceptions from `client.get_messages`.
         """
         max_messages_to_redact: int | None = self.config["redaction.max_messages"]
         cutoff_time = self._calculate_cutoff_time(ban_ts)
@@ -544,19 +534,23 @@ class RedactorPlugin(BasePlugin):
     async def _perform_redactions(
         self, room_id: RoomID, event_ids: list[EventID], original_ban_reason: str
     ) -> tuple[int, EventID | None]:
-        """Attempts to redact the provided list of event IDs with retries for transient errors.
+        """Attempts to redact a list of event IDs using `client.redact`.
 
-        Uses the original ban reason for the redaction event.
+        Iterates through `event_ids`, calling `client.redact` for each. Uses the
+        `original_ban_reason` for the redaction event's reason field. Implements
+        a retry mechanism (`REDACTION_RETRY_ATTEMPTS`) with increasing delays for
+        transient errors (Connection, Timeout, Server, Request errors). Logs and
+        skips non-retriable errors (`MForbidden`, `MNotFound`).
 
         Args:
             room_id: The room where the messages exist.
-            event_ids: A list of EventIDs to redact.
+            event_ids: A list of EventIDs to redact (should be most recent first).
             original_ban_reason: The reason string from the original ban event.
 
         Returns:
             A tuple containing:
             - The number of messages successfully redacted.
-            - The EventID of the *first* successfully redacted message.
+            - The EventID of the first successfully redacted message (most recent), or None.
         """
         redacted_count = 0
         first_success_event_id: EventID | None = None
@@ -636,12 +630,15 @@ class RedactorPlugin(BasePlugin):
 
         return redacted_count, first_success_event_id
 
-    # --- Reporting ---
-
     async def _report_action(self, ctx: ReportContext) -> None:
-        """Sends a notification message about successful redactions to the report room.
+        """Sends a formatted success message to the configured reporting room.
 
-        Includes a matrix.to link to the most recent redacted message if available.
+        Only sends if `config["reporting.room"]` is set. The message includes details
+        of the redaction action, links to the room, and a link to the most recently
+        redacted event (using its EventID as the link text).
+
+        Args:
+            ctx: A ReportContext dictionary containing details for the report.
         """
         report_room_id = self.config["reporting.room"]
         if not report_room_id:
@@ -652,9 +649,15 @@ class RedactorPlugin(BasePlugin):
             reason_text = ctx["reason"] or "Not specified"
             via_servers = self.config["reporting.vias"]
 
+            via_params = (
+                "?" + "&".join(f"via={server}" for server in via_servers) if via_servers else ""
+            )
+            room_link = f"https://matrix.to/#/{ctx['room_id']}{via_params}"
+            linked_room_identifier = f"[{room_identifier}]({room_link})"
+
             message = (
                 f"Redacted {ctx['count']}/{ctx['total_considered']} message(s) from "
-                f"`{ctx['banned_user_mxid']}` in {room_identifier} due to ban by "
+                f"`{ctx['banned_user_mxid']}` in {linked_room_identifier} due to ban by "
                 f"`{ctx['moderator_mxid']}` (Reason: '{reason_text}')"
             )
 
@@ -662,7 +665,7 @@ class RedactorPlugin(BasePlugin):
                 event_link = create_matrix_to_url(
                     ctx["room_id"], ctx["first_redacted_event_id"], via_servers
                 )
-                message += f". [Link to most recent redaction]({event_link})"
+                message += f". Most recent: [{ctx['first_redacted_event_id']}]({event_link})"
             else:
                 message += ". (Could not determine link to specific redaction)."
 
@@ -682,7 +685,14 @@ class RedactorPlugin(BasePlugin):
             self.log.exception("Failed to send redaction report to %s", report_room_id)
 
     async def _report_error(self, ctx: ErrorReportContext) -> None:
-        """Sends a notification message about errors encountered during processing."""
+        """Sends a formatted error message to the configured reporting room.
+
+        Only sends if `config["reporting.room"]` is set. Includes details about the
+        user and room involved, the error encountered, and the context if provided.
+
+        Args:
+            ctx: An ErrorReportContext dictionary containing details for the report.
+        """
         report_room_id = self.config["reporting.room"]
         if not report_room_id:
             return

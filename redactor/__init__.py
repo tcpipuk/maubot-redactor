@@ -1,8 +1,7 @@
 """Maubot plugin for automatically redacting messages from banned users.
 
-This package provides a Maubot plugin that helps automate moderation tasks
-by redacting messages from users who are banned for specific, configured reasons
-by designated moderators.
+This package provides the RedactorPlugin, which monitors ban events and
+redacts messages based on configured moderator and reason criteria.
 
 The plugin can:
 - Monitor ban events in Matrix rooms.
