@@ -513,18 +513,18 @@ class RedactorPlugin(BasePlugin):
                 self.log.exception("Failed to fetch messages for room %s", room_id)
                 raise
 
-            if not resp or not resp.chunk:
+            if not resp or not resp.events:
                 self.log.debug(
                     "No more messages found for %s from token %s.", room_id, pagination_token
                 )
                 break
 
             pagination_token = resp.end
-            batch_size = len(resp.chunk)
+            batch_size = len(resp.events)
             events_checked_total += batch_size
 
             reached_time_limit, reached_message_limit = self._process_message_batch(
-                resp.chunk, messages, cutoff_time, banned_user_mxid, max_messages_to_redact
+                resp.events, messages, cutoff_time, banned_user_mxid, max_messages_to_redact
             )
 
             self.log.debug("Processed %d events in batch for %s.", batch_size, room_id)
