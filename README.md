@@ -68,15 +68,9 @@ redaction:
 reporting:
   # Room ID or Alias where the bot should send reports (successful redactions, errors).
   # Using the Room ID (e.g. "!roomid:server") is generally more reliable than an alias.
-  # Leave null or omit for no reporting.
+  # Leave null or omit for no reporting. If a room is specified, both successful
+  # redactions and processing errors will be reported there.
   room: null
-
-  # Report successful redactions to the reporting room?
-  report_redactions: true
-
-  # Report processing errors (e.g. failure to fetch messages, transient redaction failures)
-  # to the reporting room? (Non-transient errors like permission issues are logged).
-  post_errors: true
 
   # Optional: List of Matrix servers used for constructing matrix.to links in reports.
   # Helps ensure links are accessible from various clients/servers.
