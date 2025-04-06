@@ -92,28 +92,46 @@ reporting:
 
 ## Usage Example
 
-1. Configure `redaction.mxids` with the moderators whose bans should be processed (e.g. `@moderator1:example.org`).
-2. Configure `redaction.reasons` with reason patterns (e.g. `spam`, `unwanted advertising`).
-   Remember `spam` will match "Spam", "spam", "SPAM", etc., due to case-insensitivity. If left
-   empty, any ban reason from `@moderator1:example.org` would trigger redactions.
-3. Set redaction limits, e.g. `redaction.max_messages: 5`, `redaction.max_age_hours: 48`.
-4. Configure `reporting.room` to your moderation room ID (e.g. `!modroomid:example.org`) and ensure
-   `reporting.report_redactions: true`.
-5. User `@spammer:example.net` posts several messages in a room where the bot is active over the
-   last 3 days.
-6. `@moderator1:example.org` (listed in `redaction.mxids`) bans `@spammer:example.net` with the
-   reason "Spam".
-7. The bot detects the ban event.
-8. It checks if `@moderator1:example.org` is in `redaction.mxids`. It is.
-9. It checks the reason "Spam" against `redaction.reasons`. It finds a case-insensitive match with
-   the pattern `spam`.
-10. The bot fetches recent messages from `@spammer:example.net` in that room. It only considers
-    messages sent within the last 48 hours (`max_age_hours`). From that subset, it identifies the 5
-    most recent ones (`max_messages`). Let's say 4 messages meet these criteria.
-11. The bot attempts to redact those 4 messages. It includes a reason like "Redacted due to ban...".
-    It may retry transient errors (like network issues) a few times.
-12. Assuming success, the bot sends a report to the `reporting.room`, similar to:
-    `Redacted 4/4 message(s) from @spammer:example.net in #monitored-room:example.org due to ban by @moderator1:example.org (Reason: 'Spam'). [Link to most recent redaction](https://matrix.to/#/!targetroom:example.org/$eventid?via=matrix.org)`
+The following flowchart and summary illustrate the core logic the bot follows when processing a ban event:
+
+```mermaid
+graph TD
+    A[Ban Event Received (m.room.member)] --> B{Moderator in mxids?};
+    B -- Yes --> C{Reason matches patterns?};
+    B -- No --> Z[Ignore Ban];
+    C -- Yes --> D[Fetch Recent Messages];
+    C -- No --> Z;
+    D --> E{Filter by max_age_hours};
+    E -- Messages Found --> F{Filter by max_messages};
+    E -- No Messages --> Y[Log: No Messages Found];
+    F -- Messages Found --> G[Attempt Redactions (using original ban reason)];
+    F -- No Messages --> Y;
+    G --> H{Report Redactions?};
+    H -- Yes --> I[Send Success Report];
+    H -- No --> J[Finished];
+    I --> J;
+    G --> K{Redaction Failures?};
+    K -- Yes --> L{Report Errors?};
+    K -- No --> J;
+    L -- Yes --> M[Send Error Report];
+    L -- No --> J;
+    M --> J;
+    Y --> J;
+    Z --> J;
+```
+
+This flowchart illustrates the decision-making process of the Redactor plugin:
+
+- When a ban event occurs, the plugin first checks if the ban was issued by a moderator listed in
+  the configuration (`redaction.mxids`).
+- If so, it then checks if the ban reason matches any of the configured regular expression patterns
+  (`redaction.reasons`, case-insensitively).
+- If both conditions are met, the plugin fetches the banned user's recent messages, filters them
+  based on the `max_age_hours` and `max_messages` limits, and attempts to redact the eligible
+  messages using the original ban reason.
+- Finally, if reporting is configured, it sends success or error reports to the designated
+  `reporting.room`.
+- If the moderator or reason doesn't match, the ban is ignored.
 
 ## Contributing
 

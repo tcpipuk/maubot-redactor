@@ -284,14 +284,9 @@ class RedactorPlugin(BasePlugin):
                 room_id,
             )
 
-            redaction_reason_str = (
-                f"Redacted due to ban of {banned_user_mxid} by {moderator_mxid} "
-                f"(Reason: {reason or 'Not specified'})"
-            )
-
             error_context_message = "performing redactions"
             redacted_count, first_redacted_event_id = await self._perform_redactions(
-                room_id, messages_to_redact, redaction_reason_str
+                room_id, messages_to_redact, reason
             )
 
             self.log.info(
@@ -548,25 +543,21 @@ class RedactorPlugin(BasePlugin):
         return messages
 
     async def _perform_redactions(
-        self, room_id: RoomID, event_ids: list[EventID], redaction_reason: str
+        self, room_id: RoomID, event_ids: list[EventID], original_ban_reason: str
     ) -> tuple[int, EventID | None]:
         """Attempts to redact the provided list of event IDs with retries for transient errors.
 
-        Logs warnings for common, non-critical errors like permission issues
-        or attempting to redact already-redacted messages. Retries on specific
-        connection/server/timeout errors.
+        Uses the original ban reason for the redaction event.
 
         Args:
             room_id: The room where the messages exist.
-            event_ids: A list of EventIDs to redact (should be chronologically ordered,
-                       most recent first if fetched backwards).
-            redaction_reason: The reason string to include in the redaction events.
+            event_ids: A list of EventIDs to redact.
+            original_ban_reason: The reason string from the original ban event.
 
         Returns:
             A tuple containing:
             - The number of messages successfully redacted.
-            - The EventID of the *first* successfully redacted message in the input list
-              (which corresponds to the chronologically most recent one), or None if none succeeded.
+            - The EventID of the *first* successfully redacted message.
         """
         redacted_count = 0
         first_success_event_id: EventID | None = None
@@ -576,7 +567,7 @@ class RedactorPlugin(BasePlugin):
             for attempt in range(REDACTION_RETRY_ATTEMPTS):
                 try:
                     await self.client.redact(
-                        room_id=room_id, event_id=event_id, reason=redaction_reason
+                        room_id=room_id, event_id=event_id, reason=original_ban_reason
                     )
                     redacted_count += 1
                     if first_success_event_id is None:
