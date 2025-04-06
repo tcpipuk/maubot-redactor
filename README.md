@@ -115,19 +115,6 @@ graph TD
     CheckFailures -- No --> SendSuccess[Send success report];
 ```
 
-This flowchart illustrates the decision-making process of the Redactor plugin:
-
-- When a ban event occurs, the plugin first checks if the ban was issued by a moderator listed in
-  the configuration (`redaction.mxids`).
-- If so, it then checks if the ban reason matches any of the configured regular expression patterns
-  (`redaction.reasons`, case-insensitively).
-- If both conditions are met, the plugin fetches the banned user's recent messages, filters them
-  based on the `max_age_hours` and `max_messages` limits, and attempts to redact the eligible
-  messages using the original ban reason.
-- Finally, if reporting is configured, it sends success or error reports to the designated
-  `reporting.room`.
-- If the moderator or reason doesn't match, the ban is ignored.
-
 ## Contributing
 
 Contributions are welcome! Please feel free to open an issue or submit a pull request on GitHub.
