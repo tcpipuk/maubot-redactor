@@ -96,26 +96,41 @@ The following flowchart and summary illustrate the core logic the bot follows wh
 
 ```mermaid
 graph TD
-    A["Ban Event Received (m.room.member)"] --> B{Moderator in mxids?};
-    B -- Yes --> C{Reason matches patterns?};
-    B -- No --> Z[Ignore Ban];
-    C -- Yes --> D[Fetch Recent Messages];
-    C -- No --> Z;
-    D --> E{Filter by max_age_hours};
-    E -- Messages Found --> F{Filter by max_messages};
-    E -- No Messages --> Y[Log: No Messages Found];
-    F -- Messages Found --> G["Attempt Redactions (using original ban reason)"];
-    F -- No Messages --> Y;
-    G --> H{Report Redactions?};
-    H -- Yes --> I[Send Success Report];
-    H -- No --> J[Finished];
-    I --> J;
-    G --> K{Redaction Failures?};
-    K -- Yes --> L{Report Errors?};
-    K -- No --> J;
-    L -- Yes --> M[Send Error Report];
-    L -- No --> J;
-    M --> J;
+    A["Ban Event Received (m.room.member)"] --> CheckModerator{Moderator in mxids?};
+
+    subgraph Initial Checks
+        CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
+        CheckModerator -- No --> Z[Ignore Ban];
+        CheckReason -- No --> Z;
+    end
+
+    CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
+
+    subgraph Message Processing
+        FetchMessages --> FilterAge{Filter by max_age_hours};
+        FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
+        FilterAge -- No Messages --> Y[Log: No Messages Found];
+        FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
+        FilterCount -- No Messages --> Y;
+    end
+
+    ProcessedMessages --> AttemptRedactions["Attempt Redactions (using original ban reason)"];
+
+    subgraph Redaction & Reporting
+        AttemptRedactions --> ReportRedactions{Report Redactions?};
+        ReportRedactions -- Yes --> SendSuccess[Send Success Report];
+        ReportRedactions -- No --> CheckFailures;
+        SendSuccess --> CheckFailures;
+
+        AttemptRedactions --> CheckFailures{Redaction Failures?};
+        CheckFailures -- Yes --> ReportErrors{Report Errors?};
+        CheckFailures -- No --> J[Finished];
+
+        ReportErrors -- Yes --> SendError[Send Error Report];
+        ReportErrors -- No --> J;
+        SendError --> J;
+    end
+
     Y --> J;
     Z --> J;
 ```
