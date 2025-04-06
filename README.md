@@ -96,21 +96,21 @@ The following flowchart and summary illustrate the core logic the bot follows wh
 
 ```mermaid
 graph TD
-    A["Ban Event Received (m.room.member)"] --> CheckModerator{Moderator in mxids?};
+    A["Ban Event Received<br>(m.room.member)"] --> CheckModerator{Moderator<br>in mxids?};
 
     CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
     CheckModerator -- No --> Z[Ignore Ban];
     CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
     CheckReason -- No --> Z;
 
-    FetchMessages --> FilterAge{Filter by max_age_hours};
-    FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
+    FetchMessages --> FilterAge{Filter by<br>max_age_hours};
+    FilterAge -- Messages Found --> FilterCount{Filter by<br>max_messages};
     FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
     ProcessedMessages --> AttemptRedactions["Attempt Redactions<br>(using original ban reason)"];
     FilterCount -- No Messages --> Y;
     FilterAge -- No Messages --> Y[Log: No Messages Found];
 
-    AttemptRedactions --> CheckFailures{Redaction Failures?};
+    AttemptRedactions --> CheckFailures{Redaction<br>Failures?};
     CheckFailures -- Yes --> SendError[Send Error Report];
     CheckFailures -- No --> SendSuccess[Send Success Report];
 ```
