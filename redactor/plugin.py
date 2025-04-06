@@ -309,9 +309,9 @@ class RedactorPlugin(BasePlugin):
             )
             failed_count = len(messages_to_redact) - redacted_count
 
-            if redacted_count > 0 and self.config["reporting.report_redactions"]:
+            if redacted_count > 0:
                 await self._report_action(report_ctx)
-            elif failed_count > 0 and self.config["reporting.post_errors"]:
+            elif failed_count > 0:
                 error_ctx = ErrorReportContext(
                     room_id=room_id,
                     banned_user_mxid=banned_user_mxid,
@@ -331,14 +331,13 @@ class RedactorPlugin(BasePlugin):
                 banned_user_mxid,
                 room_id,
             )
-            if self.config["reporting.post_errors"]:
-                error_ctx = ErrorReportContext(
-                    room_id=room_id,
-                    banned_user_mxid=banned_user_mxid,
-                    error=e,
-                    context_message=error_context_message,
-                )
-                await self._report_error(error_ctx)
+            error_ctx = ErrorReportContext(
+                room_id=room_id,
+                banned_user_mxid=banned_user_mxid,
+                error=e,
+                context_message=error_context_message,
+            )
+            await self._report_error(error_ctx)
 
     def _calculate_cutoff_time(self, ban_ts: datetime) -> datetime | None:
         """Calculates the earliest timestamp for message redaction consideration.
@@ -685,7 +684,7 @@ class RedactorPlugin(BasePlugin):
     async def _report_error(self, ctx: ErrorReportContext) -> None:
         """Sends a notification message about errors encountered during processing."""
         report_room_id = self.config["reporting.room"]
-        if not report_room_id or not self.config["reporting.post_errors"]:
+        if not report_room_id:
             return
 
         try:

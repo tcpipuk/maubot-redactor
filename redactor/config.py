@@ -24,10 +24,6 @@ Settings available under the 'reporting' section:
     room (str | None):
         Room ID where the bot should send reports (successful redactions, errors).
         Leave null or omit for no reporting. Example: "!room:server". Default: null.
-    report_redactions (bool):
-        Whether to report successful redactions to the reporting room. Default: true.
-    post_errors (bool):
-        Whether to report processing errors to the reporting room. Default: true.
     vias (list[str]):
         List of Matrix servers to use for constructing matrix.to links in reports.
         Example: ["matrix.org", "yourserver.org"]. Default: ["matrix.org"].

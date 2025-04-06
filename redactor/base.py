@@ -96,17 +96,10 @@ class BasePlugin(Plugin):
     async def _send_startup_report(self, message: str, level: str = "info") -> None:
         """Sends a message to the configured reporting room during startup."""
         report_room_id = self.config["reporting.room"]
-        post_errors = self.config["reporting.post_errors"]
-
-        if level == "error" and not post_errors:
-            self.log.warning(
-                "Startup error occurred but reporting.post_errors is false. Error: %s", message
-            )
-            return  # Don't report errors if disabled
 
         if not report_room_id:
             self.log.info("Reporting room not configured. Startup message: %s", message)
-            return  # Don't attempt to send if no room is set
+            return
 
         try:
             # Resolve the alias just in case it wasn't resolved during initial start
@@ -203,17 +196,12 @@ class BasePlugin(Plugin):
             self.log.info(
                 "Redactor Plugin started. Config loaded: "
                 "redaction_mxids=%s, redaction_reasons=%s, "
-                "max_messages=%s, max_age_hours=%s, report_room=%s, report_redactions=%s, "
-                "post_errors=%s",
+                "max_messages=%s, max_age_hours=%s, report_room=%s",
                 self.config["redaction.mxids"],
-                self.config[
-                    "redaction.reasons"
-                ],  # Log the raw list including potentially invalid ones
+                self.config["redaction.reasons"],
                 self.config["redaction.max_messages"],
                 self.config["redaction.max_age_hours"],
                 self.config["reporting.room"] or "(disabled)",
-                self.config["reporting.report_redactions"],
-                self.config["reporting.post_errors"],
             )
 
         except Exception:

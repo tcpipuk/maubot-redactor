@@ -106,21 +106,14 @@ graph TD
     FetchMessages --> FilterAge{Filter by max_age_hours};
     FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
     FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
-    ProcessedMessages --> AttemptRedactions["Attempt Redactions (using original ban reason)"];
+    ProcessedMessages --> AttemptRedactions["Attempt Redactions\n(using original ban reason)"];
     FilterCount -- No Messages --> Y;
     FilterAge -- No Messages --> Y[Log: No Messages Found];
 
-    AttemptRedactions --> ReportRedactions{Report Redactions?};
-    ReportRedactions -- Yes --> SendSuccess[Send Success Report];
-    ReportRedactions -- No --> CheckFailures;
-    SendSuccess --> CheckFailures;
-
     AttemptRedactions --> CheckFailures{Redaction Failures?};
-    CheckFailures -- Yes --> ReportErrors{Report Errors?};
-    CheckFailures -- No --> J[Finished];
-
-    ReportErrors -- Yes --> SendError[Send Error Report];
-    ReportErrors -- No --> J;
+    CheckFailures -- Yes --> SendError[Send Error Report];
+    CheckFailures -- No --> SendSuccess[Send Success Report];
+    SendSuccess --> J[Finished];
     SendError --> J;
 ```
 
