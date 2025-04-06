@@ -106,15 +106,13 @@ graph TD
     FetchMessages --> FilterAge{Filter by max_age_hours};
     FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
     FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
-    ProcessedMessages --> AttemptRedactions["Attempt Redactions\n(using original ban reason)"];
+    ProcessedMessages --> AttemptRedactions["Attempt Redactions<br>(using original ban reason)"];
     FilterCount -- No Messages --> Y;
     FilterAge -- No Messages --> Y[Log: No Messages Found];
 
     AttemptRedactions --> CheckFailures{Redaction Failures?};
     CheckFailures -- Yes --> SendError[Send Error Report];
     CheckFailures -- No --> SendSuccess[Send Success Report];
-    SendSuccess --> J[Finished];
-    SendError --> J;
 ```
 
 This flowchart illustrates the decision-making process of the Redactor plugin:
