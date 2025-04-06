@@ -1,0 +1,11 @@
+redaction:
+  max_messages: 50
+  max_age_hours: 2
+  # e.g. ["@moderator1:example.org", "@admin:example.org"]
+  mxids: []
+  # e.g. ["^spam$", "unwanted advertising"]
+  reasons: []
+reporting:
+  room: null
+  vias:
+    - matrix.org

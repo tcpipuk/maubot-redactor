@@ -1,0 +1,10 @@
+maubot: 0.1.0
+id: uk.tcpip.redactor
+version: 0.1.0
+license: AGPL-3.0-or-later
+modules:
+  - redactor
+main_class: RedactorPlugin
+config: true
+extra_files:
+  - base-config.yaml
