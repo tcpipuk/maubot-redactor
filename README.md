@@ -101,10 +101,9 @@ graph TD
     subgraph Initial Checks
         CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
         CheckModerator -- No --> Z[Ignore Ban];
+        CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
         CheckReason -- No --> Z;
     end
-
-    CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
 
     subgraph Message Processing
         FetchMessages --> FilterAge{Filter by max_age_hours};
