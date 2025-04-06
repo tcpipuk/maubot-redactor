@@ -98,37 +98,30 @@ The following flowchart and summary illustrate the core logic the bot follows wh
 graph TD
     A["Ban Event Received (m.room.member)"] --> CheckModerator{Moderator in mxids?};
 
-    subgraph Initial Checks
-        CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
-        CheckModerator -- No --> Z[Ignore Ban];
-        CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
-        CheckReason -- No --> Z;
-    end
+    CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
+    CheckModerator -- No --> Z[Ignore Ban];
+    CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
+    CheckReason -- No --> Z;
 
-    subgraph Message Processing
-        FetchMessages --> FilterAge{Filter by max_age_hours};
-        FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
-        FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
-        FilterCount -- No Messages --> Y;
-        FilterAge -- No Messages --> Y[Log: No Messages Found];
-    end
-
+    FetchMessages --> FilterAge{Filter by max_age_hours};
+    FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
+    FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
     ProcessedMessages --> AttemptRedactions["Attempt Redactions (using original ban reason)"];
+    FilterCount -- No Messages --> Y;
+    FilterAge -- No Messages --> Y[Log: No Messages Found];
 
-    subgraph Redaction & Reporting
-        AttemptRedactions --> ReportRedactions{Report Redactions?};
-        ReportRedactions -- Yes --> SendSuccess[Send Success Report];
-        ReportRedactions -- No --> CheckFailures;
-        SendSuccess --> CheckFailures;
+    AttemptRedactions --> ReportRedactions{Report Redactions?};
+    ReportRedactions -- Yes --> SendSuccess[Send Success Report];
+    ReportRedactions -- No --> CheckFailures;
+    SendSuccess --> CheckFailures;
 
-        AttemptRedactions --> CheckFailures{Redaction Failures?};
-        CheckFailures -- Yes --> ReportErrors{Report Errors?};
-        CheckFailures -- No --> J[Finished];
+    AttemptRedactions --> CheckFailures{Redaction Failures?};
+    CheckFailures -- Yes --> ReportErrors{Report Errors?};
+    CheckFailures -- No --> J[Finished];
 
-        ReportErrors -- Yes --> SendError[Send Error Report];
-        ReportErrors -- No --> J;
-        SendError --> J;
-    end
+    ReportErrors -- Yes --> SendError[Send Error Report];
+    ReportErrors -- No --> J;
+    SendError --> J;
 ```
 
 This flowchart illustrates the decision-making process of the Redactor plugin:
