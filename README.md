@@ -129,8 +129,6 @@ graph TD
         ReportErrors -- No --> J;
         SendError --> J;
     end
-
-    Y --> J;
 ```
 
 This flowchart illustrates the decision-making process of the Redactor plugin:
