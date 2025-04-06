@@ -98,21 +98,21 @@ The following flowchart and summary illustrate the core logic the bot follows wh
 graph TD
     A["Ban Event Received<br>(m.room.member)"] --> CheckModerator{Moderator<br>in mxids?};
 
-    CheckModerator -- Yes --> CheckReason{Reason matches patterns?};
+    CheckModerator -- Yes --> CheckReason{Reason<br>matches<br>patterns?};
     CheckModerator -- No --> Z[Ignore Ban];
-    CheckReason -- Yes --> FetchMessages["Fetch Recent Messages"];
+    CheckReason -- Yes --> FetchMessages["Fetch recent messages"];
     CheckReason -- No --> Z;
 
     FetchMessages --> FilterAge{Filter by<br>max_age_hours};
     FilterAge -- Messages Found --> FilterCount{Filter by<br>max_messages};
-    FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
-    ProcessedMessages --> AttemptRedactions["Attempt Redactions<br>(using original ban reason)"];
+    FilterCount -- Messages Found --> ProcessedMessages(Eligible messages);
+    ProcessedMessages --> AttemptRedactions["Attempt redactions<br>(using original ban reason)"];
     FilterCount -- No Messages --> Y;
-    FilterAge -- No Messages --> Y[Log: No Messages Found];
+    FilterAge -- No Messages --> Y[Log: No messages found];
 
-    AttemptRedactions --> CheckFailures{Redaction<br>Failures?};
-    CheckFailures -- Yes --> SendError[Send Error Report];
-    CheckFailures -- No --> SendSuccess[Send Success Report];
+    AttemptRedactions --> CheckFailures{Redaction<br>failures?};
+    CheckFailures -- Yes --> SendError[Send error report];
+    CheckFailures -- No --> SendSuccess[Send success report];
 ```
 
 This flowchart illustrates the decision-making process of the Redactor plugin:
