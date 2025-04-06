@@ -108,9 +108,9 @@ graph TD
     subgraph Message Processing
         FetchMessages --> FilterAge{Filter by max_age_hours};
         FilterAge -- Messages Found --> FilterCount{Filter by max_messages};
-        FilterAge -- No Messages --> Y[Log: No Messages Found];
         FilterCount -- Messages Found --> ProcessedMessages(Eligible Messages);
         FilterCount -- No Messages --> Y;
+        FilterAge -- No Messages --> Y[Log: No Messages Found];
     end
 
     ProcessedMessages --> AttemptRedactions["Attempt Redactions (using original ban reason)"];
