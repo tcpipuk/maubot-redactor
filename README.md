@@ -132,7 +132,6 @@ graph TD
     end
 
     Y --> J;
-    Z --> J;
 ```
 
 This flowchart illustrates the decision-making process of the Redactor plugin:
