@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -257,7 +257,7 @@ wheels = [
 
 [[package]]
 name = "maubot"
-version = "0.5.2"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -276,9 +276,9 @@ dependencies = [
     { name = "setuptools" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b4/34/36369b92f27f1f0cb27816364023dbe7dd07c435b45014b1d113a15b7e6b/maubot-0.5.2.tar.gz", hash = "sha256:c8b358cddc29894ba05e48c613544988bdf9549bb8095f2dd196a2729380793c", size = 1986043, upload-time = "2025-05-05T21:12:39.229Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/79/bd66904c80e3a205b2516c09510da81ea078f5f893f06814263cb15dffa8/maubot-0.6.0.tar.gz", hash = "sha256:657c3272d4e32a0d6cb1813a121735b350cf856c9cd3c748438310cfa1105c68", size = 1988215, upload-time = "2025-11-17T13:55:52.91Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/91/b1/a7c9615443df839a4050be9c7f65783034dfa6afc275fa00d036ff80827f/maubot-0.5.2-py3-none-any.whl", hash = "sha256:e4feaa6654ae4e8387d1a7c754f9c02d2b948aa65fe45c752077e924cbbaf591", size = 2032917, upload-time = "2025-05-05T21:12:36.815Z" },
+    { url = "https://files.pythonhosted.org/packages/17/36/3687f6644ea219ce8acc3e71d848f1db6693c71c7e12d1068c922d875cd1/maubot-0.6.0-py3-none-any.whl", hash = "sha256:11516d53b7e799cc845d481e940507476d9b7734497d76d601714a61fa523a0f", size = 2035375, upload-time = "2025-11-17T13:55:50.963Z" },
 ]
 
 [[package]]
@@ -312,16 +312,16 @@ dev = [
 
 [[package]]
 name = "mautrix"
-version = "0.20.7"
+version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "attrs" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/60/366faf5aafaee86fe0e7250fd4d61ed97fc379f0b68e9f55693e4b00688b/mautrix-0.20.7.tar.gz", hash = "sha256:92037f3f85dc5a1ee1394467ee53a9c71ce460292f08d3a47a5ef28914575892", size = 243878, upload-time = "2025-01-03T10:27:35.258Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/a7/8d6d0589e211ecf3a72ce4b28cc32c857c4043d1a6963d63ac9f726af653/mautrix-0.21.0.tar.gz", hash = "sha256:a14e0582e114cb241f282f9e717014608f36c03f1dc59afcd71b4e81780ffe2e", size = 254726, upload-time = "2025-11-17T13:53:09.996Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/ef/5ef9698d2baccbe0bfe665ac1ecbff499b31a3f76667a0d26e4ffa5185cd/mautrix-0.20.7-py3-none-any.whl", hash = "sha256:47fbc6e442e3280cfab70691b88649a50289e1ce4623482895e8d476f32d216e", size = 319711, upload-time = "2025-01-03T10:27:31.911Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/d6/d4b3ae380dacdc9fb07bc3eb7dd17f43b8a7ce391465a184d1094acb66c1/mautrix-0.21.0-py3-none-any.whl", hash = "sha256:1cba30d69f46351918a3b8bc4e5657465cac8470d42ddd2287a742653cab7194", size = 334131, upload-time = "2025-11-17T13:53:08.117Z" },
 ]
 
 [[package]]
